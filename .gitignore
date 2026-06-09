@@ -21,9 +21,9 @@ prisma/migrations/dev.db*
 prisma/dev.db*
 prisma/migrations.sqlite.backup/
 
-# Uploaded user files
-apps/api/uploads/
-uploads/
+# Uploaded user files (runtime only, NOT the src/uploads module)
+/apps/api/uploads/
+/uploads/
 
 # SQLite backups
 .env.sqlite.backup
