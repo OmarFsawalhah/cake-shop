@@ -1,0 +1,222 @@
+// Cake Shop — Prisma schema (SQLite dev / PostgreSQL prod)
+// See docs/er-diagram.md for the conceptual model.
+// NOTE: SQLite does not support native enums; String is used with app-layer validation.
+//       Switch provider to "postgresql" and restore enum types for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Role: "customer" | "admin"
+// OrderStatus: "pending" | "confirmed" | "baking" | "ready" | "out_for_delivery" | "delivered" | "cancelled" | "refunded"
+// PaymentMethod: "cash" | "online"
+// PaymentStatus: "unpaid" | "pending" | "paid" | "failed" | "refunded"
+// SenderRole: "customer" | "admin"
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String
+  passwordHash String
+  role         String   @default("customer")
+  createdAt    DateTime @default(now())
+
+  addresses   Address[]
+  cart        Cart?
+  orders      Order[]
+  customCakes CustomCake[]
+  reviews     Review[]
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  street     String
+  city       String
+  postalCode String
+  isDefault  Boolean @default(false)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+}
+
+model Cake {
+  id           String  @id @default(cuid())
+  name         String
+  description  String
+  basePrice    Float
+  imageUrl     String
+  category     String
+  isActive     Boolean @default(true)
+  tag          String?
+  gradient     String?
+  displayOrder Int     @default(0)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  reviews    Review[]
+}
+
+model Shape {
+  id            String @id @default(cuid())
+  name          String @unique
+  priceModifier Float
+  modelAssetUrl String
+
+  customCakes CustomCake[]
+}
+
+model Flavor {
+  id            String  @id @default(cuid())
+  name          String  @unique
+  priceModifier Float
+  isAvailable   Boolean @default(true)
+
+  layers CustomCakeLayer[]
+}
+
+model Topping {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  price       Float
+  isAvailable Boolean @default(true)
+
+  customCakes CustomCakeTopping[]
+}
+
+model CustomCake {
+  id            String   @id @default(cuid())
+  userId        String
+  shapeId       String
+  size          String
+  layerCount    Int
+  frosting      String
+  messageText   String?
+  colorHex      String
+  computedPrice Float
+  photoUrl      String?
+  messageFont   String?
+  createdAt     DateTime @default(now())
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shape      Shape               @relation(fields: [shapeId], references: [id])
+  layers     CustomCakeLayer[]
+  toppings   CustomCakeTopping[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+model CustomCakeLayer {
+  id           String @id @default(cuid())
+  customCakeId String
+  layerOrder   Int
+  flavorId     String
+
+  customCake CustomCake @relation(fields: [customCakeId], references: [id], onDelete: Cascade)
+  flavor     Flavor     @relation(fields: [flavorId], references: [id])
+
+  @@unique([customCakeId, layerOrder])
+}
+
+model CustomCakeTopping {
+  customCakeId String
+  toppingId    String
+
+  customCake CustomCake @relation(fields: [customCakeId], references: [id], onDelete: Cascade)
+  topping    Topping    @relation(fields: [toppingId], references: [id])
+
+  @@id([customCakeId, toppingId])
+}
+
+model Cart {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+}
+
+model CartItem {
+  id           String  @id @default(cuid())
+  cartId       String
+  cakeId       String?
+  customCakeId String?
+  quantity     Int
+  unitPrice    Float
+
+  cart       Cart        @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cake       Cake?       @relation(fields: [cakeId], references: [id])
+  customCake CustomCake? @relation(fields: [customCakeId], references: [id])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  userId        String
+  addressId     String
+  totalAmount   Float
+  status        String   @default("pending")
+  paymentMethod String
+  paymentStatus String   @default("unpaid")
+  deliveryDate  DateTime
+  createdAt     DateTime @default(now())
+
+  user     User        @relation(fields: [userId], references: [id])
+  address  Address     @relation(fields: [addressId], references: [id])
+  items    OrderItem[]
+  payment  Payment?
+  messages Message[]
+}
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  cakeId       String?
+  customCakeId String?
+  quantity     Int
+  unitPrice    Float
+
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cake       Cake?       @relation(fields: [cakeId], references: [id])
+  customCake CustomCake? @relation(fields: [customCakeId], references: [id])
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  orderId       String    @unique
+  provider      String
+  transactionId String
+  amount        Float
+  status        String
+  paidAt        DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  cakeId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cake Cake @relation(fields: [cakeId], references: [id])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  orderId    String
+  senderRole String
+  body       String
+  sentAt     DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
